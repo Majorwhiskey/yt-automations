@@ -13,6 +13,7 @@ from config import (
     SUBTITLE_OUTLINE_COLOR,
     SUBTITLE_OUTLINE_WIDTH,
     SUBTITLE_PRIMARY_COLOR,
+    SUBTITLE_SHADOW_DEPTH,
     VERTICAL_HEIGHT,
     VERTICAL_WIDTH,
 )
@@ -56,7 +57,7 @@ def write_karaoke_ass(
 ) -> Path:
     """Write an ASS subtitle file with per-word karaoke highlighting.
 
-    Uses the `\k` ASS tag to highlight each word as it's spoken. Requires word-level
+    Uses the `\\k` ASS tag to highlight each word as it's spoken. Requires word-level
     timestamps from Whisper — falls back to write_srt semantics if no words present.
     """
     has_words = any(getattr(seg, "words", None) for seg in segments)
@@ -108,7 +109,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Karaoke,{SUBTITLE_FONT},{SUBTITLE_FONT_SIZE},{SUBTITLE_PRIMARY_COLOR},{SUBTITLE_HIGHLIGHT_COLOR},{SUBTITLE_OUTLINE_COLOR},&H00000000,-1,0,0,0,100,100,0,0,1,{SUBTITLE_OUTLINE_WIDTH},0,2,40,40,{SUBTITLE_BOTTOM_MARGIN},1
+Style: Karaoke,{SUBTITLE_FONT},{SUBTITLE_FONT_SIZE},{SUBTITLE_PRIMARY_COLOR},{SUBTITLE_HIGHLIGHT_COLOR},{SUBTITLE_OUTLINE_COLOR},&H00000000,-1,0,0,0,100,100,0,0,1,{SUBTITLE_OUTLINE_WIDTH},{SUBTITLE_SHADOW_DEPTH},2,40,40,{SUBTITLE_BOTTOM_MARGIN},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

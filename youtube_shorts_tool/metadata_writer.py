@@ -25,10 +25,13 @@ def write_clip_metadata(
         "end_seconds": round(clip.end_seconds, 3),
         "duration_seconds": round(clip.end_seconds - clip.start_seconds, 3),
         "hook": clip.hook,
+        "hook_type": clip.hook_type,
+        "quotable_line": clip.quotable_line,
         "topic": clip.topic,
         "score": clip.score,
         "suggested_title": clip.title,
         "suggested_description": clip.description,
+        "pinned_comment": clip.pinned_comment,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
     output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -57,10 +60,13 @@ def write_shorts_report(
                 "end_seconds": round(c.end_seconds, 3),
                 "duration_seconds": round(c.end_seconds - c.start_seconds, 3),
                 "hook": c.hook,
+                "hook_type": c.hook_type,
+                "quotable_line": c.quotable_line,
                 "topic": c.topic,
                 "score": c.score,
                 "suggested_title": c.title,
                 "suggested_description": c.description,
+                "pinned_comment": c.pinned_comment,
             }
             for c in clips
         ],

@@ -196,6 +196,7 @@ def _process_single_clip(
         publish_meta = generate_publish_metadata(clip, video_meta.title)
         clip.title = publish_meta["title"]
         clip.description = publish_meta["description"]
+        clip.pinned_comment = publish_meta["pinned_comment"]
     except Exception as exc:
         logger.warning("Publish metadata generation failed for clip %d: %s",
                        clip.clip_number, exc)

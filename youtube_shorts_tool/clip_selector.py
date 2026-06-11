@@ -29,27 +29,43 @@ class SelectedClip:
     hook: str
     topic: str
     score: float
+    hook_type: str = ""
+    quotable_line: str = ""
     title: str = ""
     description: str = ""
+    pinned_comment: str = ""
 
 
-_CLIP_SELECTION_PROMPT = """You are an expert short-form video editor who has produced thousands of viral \
-YouTube Shorts. You are given a full video transcript with timestamps. Your job is to identify the \
-most compelling segments to extract as standalone Shorts.
+_CLIP_SELECTION_PROMPT = """You are an award-winning short-form video producer who has edited thousands of \
+viral YouTube Shorts for top creators. You are given a full video transcript with timestamps. Your job is \
+to find the segments with the highest potential to stop the scroll and hold attention to the very end.
 
 Selection criteria — every clip MUST satisfy ALL of these:
 1. Duration between {min_duration} and {max_duration} seconds.
-2. Self-contained — viewer should understand the clip without prior context.
-3. Starts with a strong hook: a surprising claim, a provocative question, or a bold statement.
-4. Has a clear beginning, middle, and end (a complete thought or mini-story).
-5. Starts and ends on sentence boundaries — never mid-sentence.
-6. Avoids filler, throat-clearing, and run-up exposition at the start.
+2. Self-contained — a viewer with zero context understands and feels the moment within 2 seconds.
+3. Opens on a hook in the FIRST sentence — pick from these hook archetypes and vary them across clips:
+   - Curiosity gap ("You won't believe what happened next…")
+   - Stakes/danger ("If this goes wrong, we're in serious trouble")
+   - Emotional peak (raw fear, joy, heartbreak, triumph)
+   - Bold/controversial claim or surprising statistic
+   - Mid-action cliffhanger that demands resolution
+4. Has a complete narrative arc: setup → escalation/tension → payoff or twist. The payoff should land \
+   near the end of the clip, not be cut off.
+5. Starts and ends on clean sentence boundaries — never mid-sentence, never mid-breath.
+6. Cuts all filler, dead air, throat-clearing, and slow run-up exposition — get to the hook immediately.
+7. Prefer moments with visible emotion, conflict, humor, or a surprising reveal over flat exposition.
+
+Diversity requirement: across the returned clips, vary the hook archetype and emotional tone — don't \
+return four clips that all open the same way.
 
 Scoring rubric (0–10):
-- 9–10: viral potential — strong hook + payoff + quotable line
-- 7–8: strong standalone — clear value, polished structure
-- 5–6: decent but missing a sharp hook or payoff
+- 9–10: scroll-stopping — sharp hook, rising tension, satisfying payoff, quotable line
+- 7–8: strong standalone — clear arc, solid hook, holds attention
+- 5–6: decent but missing a sharp hook or clean payoff
 - Below 5: do not return
+
+For each clip also identify the single most "quotable" line (max 12 words) — the one most likely to be \
+used as an on-screen title card or pulled into the description.
 
 Return between 3 and {max_clips} clips, ordered by score (highest first). All timestamps must be valid \
 HH:MM:SS format and fall within the transcript range.
@@ -65,7 +81,9 @@ No prose before or after.
       "start_time": "HH:MM:SS",
       "end_time": "HH:MM:SS",
       "hook": "first sentence of the clip",
+      "hook_type": "one of: curiosity_gap | stakes | emotional_peak | bold_claim | cliffhanger",
       "topic": "one-sentence subject summary",
+      "quotable_line": "the single most quotable line in the clip",
       "score": 8.5
     }}
   ]
@@ -80,13 +98,25 @@ Transcript (each line: [HH:MM:SS - HH:MM:SS] text):
 {transcript_text}"""
 
 
-_PUBLISH_METADATA_PROMPT = """Source video: {video_title}
+_PUBLISH_METADATA_PROMPT = """You are a YouTube Shorts copywriter for a professional channel. Write \
+publish-ready metadata for the clip below.
+
+Source video: {video_title}
 
 Clip hook: {hook}
 Clip topic: {topic}
+Most quotable line: {quotable_line}
+Hook type: {hook_type}
 
-Write a YouTube Shorts title (max 60 characters, no emojis, no clickbait, no ALL CAPS) and a \
-two-sentence description ending with exactly three relevant hashtags.
+Requirements:
+- Title: max 60 characters, no emojis, no ALL CAPS, no generic clickbait ("You won't believe...", \
+"GONE WRONG"). Lead with the specific, concrete detail that makes this clip different — a number, \
+name, place, or outcome. Should read like a professional creator's title, not a tabloid headline.
+- Description: 2–3 sentences. First sentence restates the hook in fresh wording (don't just repeat the \
+title). Following sentence(s) add context or a teaser for the payoff without fully spoiling it. End \
+with exactly three relevant, specific hashtags (avoid generic tags like #shorts #viral #fyp).
+- Pinned comment: one short, conversational question (under 15 words) that invites viewers to reply — \
+used as the channel's pinned comment to drive engagement.
 
 OUTPUT FORMAT — respond with ONLY a JSON object matching this schema, wrapped in a ```json fence. \
 No prose before or after.
@@ -94,7 +124,8 @@ No prose before or after.
 ```json
 {{
   "title": "string",
-  "description": "string"
+  "description": "string",
+  "pinned_comment": "string"
 }}
 ```
 """
@@ -122,6 +153,10 @@ def select_clips(
     raw = _invoke_claude(prompt)
     payload = _extract_json(raw)
     if not payload or "clips" not in payload:
+        logger.warning("Clip selection returned unparseable JSON, retrying once")
+        raw = _invoke_claude(prompt)
+        payload = _extract_json(raw)
+    if not payload or "clips" not in payload:
         raise RuntimeError(f"Claude returned no parseable clip selection. Raw output: {raw[:500]}")
 
     selected: list[SelectedClip] = []
@@ -148,6 +183,8 @@ def select_clips(
                 hook=str(cand.get("hook", "")),
                 topic=str(cand.get("topic", "")),
                 score=float(cand.get("score", 0.0)),
+                hook_type=str(cand.get("hook_type", "")),
+                quotable_line=str(cand.get("quotable_line", "")),
             )
         )
 
@@ -156,20 +193,23 @@ def select_clips(
 
 
 def generate_publish_metadata(clip: SelectedClip, video_title: str) -> dict[str, str]:
-    """Generate a Shorts-ready title and description for a single clip."""
+    """Generate a Shorts-ready title, description, and pinned comment for a single clip."""
     prompt = _PUBLISH_METADATA_PROMPT.format(
         video_title=video_title,
         hook=clip.hook,
         topic=clip.topic,
+        quotable_line=clip.quotable_line or clip.hook,
+        hook_type=clip.hook_type or "unspecified",
     )
 
     raw = _invoke_claude(prompt)
     payload = _extract_json(raw)
     if not payload:
-        return {"title": clip.topic[:60], "description": clip.hook}
+        return {"title": clip.topic[:60], "description": clip.hook, "pinned_comment": ""}
     return {
         "title": str(payload.get("title", clip.topic))[:60],
         "description": str(payload.get("description", clip.hook)),
+        "pinned_comment": str(payload.get("pinned_comment", "")),
     }
 
 

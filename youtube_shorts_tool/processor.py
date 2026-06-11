@@ -34,15 +34,20 @@ def cut_clip(
 ) -> Path:
     """Cut a frame-accurate segment, re-encoding via libx264.
 
-    We place `-ss` AFTER `-i` for frame-accurate seeking. The fast seek (before
-    `-i`) is keyframe-aligned and would drift by up to a GOP length. Codec copy
-    would also be keyframe-snapped, so we re-encode here.
+    Uses a two-stage seek: a fast keyframe-aligned `-ss` before `-i` jumps close to
+    the target, then a small `-ss` after `-i` decodes only the remaining ~30s for
+    frame-accurate positioning. This avoids decoding the entire video from the start
+    for clips that occur late in long source videos.
     """
     duration = end_seconds - start_seconds
+    seek_buffer = 30.0
+    coarse_seek = max(0.0, start_seconds - seek_buffer)
+    fine_seek = start_seconds - coarse_seek
     cmd = [
         "ffmpeg", "-y",
+        "-ss", f"{coarse_seek:.3f}",
         "-i", str(source_video),
-        "-ss", f"{start_seconds:.3f}",
+        "-ss", f"{fine_seek:.3f}",
         "-t", f"{duration:.3f}",
         "-c:v", "libx264",
         "-c:a", "aac",
