@@ -17,6 +17,14 @@ youtube_shorts_tool/_downloads/
 .env
 .env.local
 
+# Secrets / OAuth credentials — never commit
+client_secret.json
+token.json
+
+# Run logs
+*.log
+*.log.err
+
 # OS / editor
 .DS_Store
 Thumbs.db

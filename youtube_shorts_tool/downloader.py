@@ -48,6 +48,16 @@ def download_video(url: str, output_dir: Path) -> VideoMetadata:
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,
+        # Resilience: chunked HTTP downloads + aggressive retries to survive
+        # flaky residential connections. http_chunk_size shrinks the per-request
+        # window so a mid-stream stall costs ~1 MB instead of the full file.
+        "retries": 30,
+        "fragment_retries": 30,
+        "file_access_retries": 10,
+        "socket_timeout": 60,
+        "http_chunk_size": 1024 * 1024,  # 1 MB chunks
+        "continuedl": True,
+        "concurrent_fragment_downloads": 4,
     }
 
     with yt_dlp.YoutubeDL(video_opts) as ydl:
